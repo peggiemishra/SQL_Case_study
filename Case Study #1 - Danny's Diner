@@ -1,0 +1,235 @@
+Case Study #1 - Danny's Diner
+
+---What is the total amount each customer spent at the restaurant?
+
+select 
+s.customer_id,
+sum(m.price) 
+from sales s 
+inner join menu m 
+on s.product_id=m.product_id 
+group by s.customer_id;
+
+---How many days has each customer visited the restaurant?
+
+select 
+customer_id,
+count(distinct order_date) 
+from sales 
+group by customer_id;
+ 
+----What was the first item from the menu purchased by each customer?
+
+
+select 
+tbl.customer_id,
+m.product_name from menu m 
+inner join 
+	(
+	select customer_id,
+	product_id 
+		from
+		(select customer_id,
+		product_id,
+		row_number()over(partition by customer_id order by order_date) as rn 
+		from sales)s 
+	where s.rn=1 
+	)tbl
+on tbl.product_id=m.product_id;
+
+---What is the most purchased item on the menu and how many times was it purchased by all customers?
+
+
+SELECT 
+s.product_id,
+COUNT(s.product_id) AS no_of_orders, 
+product_name
+FROM sales AS s
+JOIN menu AS m
+ON s.product_id = m.product_id
+GROUP BY s.product_id
+ORDER BY no_of_orders DESC;
+
+
+---Which item was the most popular for each customer?
+
+select 
+tbl.customer_id,
+tbl.product_name
+from 
+		(select 
+		s.customer_id,
+		m.product_name,
+		count(s.product_id),
+		dense_rank() over ( partition by s.customer_id order by 
+		count(s.product_id) desc) as dr 
+		from sales s 
+		inner join menu m 
+		on s.product_id = m.product_id 
+		group by s.customer_id,s.product_id) as tbl
+where tbl.dr=1;
+
+
+---Which item was purchased first by the customer after they became a member?
+
+select tbl.customer_id,m2.product_name 
+from
+		(
+		select 
+		s.customer_id,
+		s.product_id,
+		dense_rank() over( partition by s.customer_id order by s.order_date) as rn from 
+		sales s 
+		inner join members m1
+		on s.customer_id=m1.customer_id
+		where s.order_date >= m1.join_date
+		) tbl 
+inner join menu m2
+on tbl.product_id=m2.product_id
+where tbl.rn=1
+order by tbl.customer_id
+
+
+---Which item was purchased just before the customer became a member?
+
+
+select tbl.customer_id,m2.product_name 
+from
+(
+			select 
+			s.customer_id,
+			s.product_id,
+			dense_rank() over( partition by s.customer_id order by s.order_date desc ) as rn from 
+			sales s inner  join 
+			members m1
+			on s.customer_id=m1.customer_id
+			where s.order_date < m1.join_date
+			) tbl 
+inner join menu m2
+on tbl.product_id=m2.product_id
+where tbl.rn=1
+
+
+---What is the total items and amount spent for each member before they became a member?
+
+select 
+tbl.customer_id,
+count(tbl.product_id) as num_of_items,
+sum(tbl.price) 
+from
+   (
+	select 
+	s.customer_id,
+	s.product_id,
+	m2.price
+	from 
+	sales s 
+	inner join members m1
+	on s.customer_id=m1.customer_id
+	inner join menu m2
+	on s.product_id=m2.product_id
+	where s.order_date < m1.join_date
+	) tbl
+group by tbl.customer_id
+
+----If each $1 spent equates to 10 points and sushi has a 2x points multiplier - how many points would each customer have?
+
+select 
+s.customer_id,
+sum(tbl.points)
+from
+	(
+	select *,
+	case when product_id=1 then price*20 else price*10 end as points
+	from menu ) tbl 
+inner join sales s 
+on tbl.product_id=s.product_id 
+group by s.customer_id
+
+
+---In the first week after a customer joins the program (including their join date) they earn 2x points on all items, not just sushi - how many points do customer A and B have at the end of January?
+
+select 
+tbl.customer_id,
+sum(tbl.points) 
+from 
+	(
+	select s.customer_id,
+	case when s.order_date < dt.join_date then m.price * 10 
+		 when s.order_date >= dt.join_date then m.price *20
+		 when s.order_date between dt.valid_date and dt.last_date then m.price *10 
+	else m.price * 10 
+	end as points 
+	from 
+	sales s join 
+			(
+			SELECT *,
+			DATE_ADD(join_date,INTERVAL 6 DAY) as valid_date,
+			'2021-01-31' as last_date
+			from members 
+			)as dt 
+	on s.customer_id=dt.customer_id
+	join menu  m
+	on s.product_id=m.product_id) tbl
+group by tbl.customer_id
+
+#Bonus Questions
+---Recreate the following table output using the available data:
+
+select
+tbl.customer_id,
+tbl.order_date,
+m.product_name,
+m.price,
+case when tbl.cid is null  then 'N'
+     when tbl.order_date<tbl.join_date then 'N'
+     else 'Y' end as member
+from
+(select
+s.customer_id,
+s.product_id,
+m1.customer_id as cid,
+s.order_date,
+m1.join_date from
+sales s
+left join members m1
+on s.customer_id = m1.customer_id )tbl
+left join menu m
+on tbl.product_id = m.product_id
+order by tbl.customer_id,tbl.order_date,m.product_name;
+
+
+
+--Rank All The Things
+select 
+tbl1.*,
+case when tbl1.MEMBER = 'Y' THEN dense_RANK() OVER(PARTITION BY tbl1.CUSTOMER_ID, tbl1.MEMBER ORDER BY tbl1.ORDER_DATE) 
+    else NULL  end as ranking
+   
+from
+(
+select
+tbl.customer_id,
+tbl.order_date,
+m.product_name,
+m.price,
+case when tbl.cid is null  then 'N'
+     when tbl.order_date<tbl.join_date then 'N'
+     else 'Y' end as member
+from
+(select
+s.customer_id,
+s.product_id,
+m1.customer_id as cid,
+s.order_date,
+m1.join_date from
+sales s
+left join members m1
+on s.customer_id = m1.customer_id )tbl
+left join menu m
+on tbl.product_id = m.product_id
+) tbl1 
+order by tbl1.customer_id,tbl1.order_date,tbl1.product_name
+
+
+
