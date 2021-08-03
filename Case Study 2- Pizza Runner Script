@@ -1,0 +1,148 @@
+--A. Pizza Metrics
+--How many pizzas were ordered?
+select count(*) from customer_orders;+----------+
+| count(*) |
++----------+
+|       14 |
+
+--How many unique customer orders were made?
+
+select count(distinct order_time) as unique_customer_orders
+from customer_orders;
+	
++------------------------+
+| UNIQUE_CUSTOMER_ORDERS |
++------------------------+
+|                     10 |
++------------------------+
+
+--How many successful orders were delivered by each runner?
+select runner_id,
+count(order_id) as number_of_orders 
+from runner_orders 
+where cancellation is null 
+group by runner_id ;
+
++-----------+------------------+
+| runner_id | number_of_orders |
++-----------+------------------+
+|         1 |                4 |
+|         2 |                3 |
+|         3 |                1 |
++-----------+------------------+
+
+--How many of each type of pizza was delivered?
+select pizza_id,count(order_id) from 
+customer_orders where order_id
+in (select order_id from runner_orders where cancellation is null ) group by pizza_id;
+
++----------+-----------------+
+| pizza_id | count(order_id) |
++----------+-----------------+
+|        1 |               9 |
+|        2 |               3 |
++----------+-----------------+
+
+--How many Vegetarian and Meatlovers were ordered by each customer?
+select 
+c.customer_id,
+sum(case when c.pizza_id=1 then 1 else 0 end) as "MEATLOVERS",
+sum(case when c.pizza_id=2 then 1 else 0 end) as "VEGETERIAN"
+from 
+customer_orders c  
+join pizza_names p
+on c.pizza_id=p.pizza_id
+group by c.customer_id
+order by c.customer_id;
+
++-------------+------------+------------+
+| customer_id | MEATLOVERS | VEGETERIAN |
++-------------+------------+------------+
+|         101 |          2 |          1 |
+|         102 |          2 |          1 |
+|         103 |          3 |          1 |
+|         104 |          3 |          0 |
+|         105 |          0 |          1 |
++-------------+------------+------------+
+
+--What was the maximum number of pizzas delivered in a single order?
+
+select a.order_id, count(*) max_pizzas_delivered
+from customer_orders a join runner_orders b  
+on a.order_id = b.order_id 
+group by a.order_id
+order by max_pizzas_delivered desc
+limit 1;
+
++----------+----------------------+
+| order_id | max_pizzas_delivered |
++----------+----------------------+
+|        4 |                    3 |
++----------+----------------------+
+ 
+--For each customer, how many delivered pizzas had at least 1 change and how many had no changes?
+
+select a.customer_id, 
+sum( case when exclusions is null and extras is null then 1 else 0 end) as "no changes",
+sum( case when exclusions is not null or extras is not null then 1 else 0 end) as "at least 1 change"
+from customer_orders  a join runner_orders b 
+on a.order_id = b.order_id
+where cancellation is null
+group by a.customer_id
+order by a.customer_id;
+
++-------------+------------+-------------------+
+| customer_id | no changes | at least 1 change |
++-------------+------------+-------------------+
+|         101 |          2 |                 0 |
+|         102 |          3 |                 0 |
+|         103 |          0 |                 3 |
+|         104 |          1 |                 2 |
+|         105 |          0 |                 1 |
++-------------+------------+-------------------+
+
+--How many pizzas were delivered that had both exclusions and extras?
+
+select count(co.order_id) as no_of_delivered_pizza
+from customer_orders  co
+where exists (select topping_id from pizza_toppings pt where co.extras=pt.topping_id ) 
+and exists (select topping_id from pizza_toppings pt where co.exclusions=pt.topping_id)
+and co.order_id
+in (select order_id from runner_orders where cancellation is null)
+group by customer_id
+
++-----------------------+
+| no_of_delivered_pizza |
++-----------------------+
+|                     1 |
+
+--What was the total volume of pizzas ordered for each hour of the day?
+
+select hour(order_time),count(order_id)as no_of_pizzas from customer_orders group by hour(order_time)
+order by hour(order_time);
++------------------+--------------+
+| hour(order_time) | no_of_pizzas |
++------------------+--------------+
+|               11 |            1 |
+|               13 |            3 |
+|               18 |            3 |
+|               19 |            1 |
+|               21 |            3 |
+|               23 |            3 |
+
+
+--What was the volume of orders for each day of the week?
+
+select dayofweek(order_time),count(order_id)as no_of_pizzas from customer_orders group by dayofweek(order_time) 
+order by dayofweek(order_time);
+
++-----------------------+--------------+
+| dayofweek(order_time) | no_of_pizzas |
++-----------------------+--------------+
+|                     4 |            5 |
+|                     5 |            3 |
+|                     6 |            1 |
+|                     7 |            5 |
++-----------------------+--------------+
+
+
